@@ -11,7 +11,7 @@ The pipeline integrates **Uncertainty Quantification (UQ)** to support risk-awar
 - **Epistemic Uncertainty**  
   Model uncertainty due to lack of knowledge, computed using an **Evidential Neural Network (ENN)** observing the grid state.
 
-A **final binary classifier** combines grid statistics with uncertainty features to predict whether disconnecting a given line will cause a blackout.
+A **final binary classifier** combines grid statistics with uncertainty-aware features to estimate blackout risk and quantify the confidence of the AI assistant’s recommendations, preventing unsafe operations in critical power grid environments.
 
 ---
 
