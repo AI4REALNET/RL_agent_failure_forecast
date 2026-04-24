@@ -45,14 +45,14 @@ grid_security_project/
 │   └── final_classifier36.pkl           # Final blackout classifier
 │
 ├── llm_rules_results/                   # Generated Symbolic Rules (Dual LLM output
-│   ├── temp_<value>/                    # Explore different LLM temperatures (e.g., temp_0.3, temp_0.5)
-│       ├── line_<line_id>/              # Results for a specific critical line - line_id
+│   └── temp_<value>/                    # Explore different LLM temperatures (e.g., temp_0.3, temp_0.5)
+│       └── line_<line_id>/              # Results for a specific critical line - line_id
 │           ├── best_changes.txt         # Log of modifications made to the rule
 │           ├── best_feedback.txt        # Evaluator LLM feedback on the rule     
 │           ├── best_justification.txt   # Logic justification
 │           ├── best_rule.py             # The final interpretable Python rule
 │           ├── iteration_history.csv    # Initial rule candidates proposed by the LLM
-│           ├── seed_candidates.csv      # Results for another critical line
+│           └── seed_candidates.csv      # Results for another critical line
 │   
 ├── src/
 │   ├── collect_data.py                  # Simulation and dataset generation
