@@ -1,17 +1,18 @@
 # Forecast RL Agent Failure
 
-This repository implements a **Machine Learning pipeline** for **power grid security assessment**.  
-The objective is to predict the probability of cascading failures caused by the disconnection of critical transmission lines.
+This repository implements a framework to **quantify and predict the realiability of pre-trained Reinforcement Learning (RL) agents** used fot real-time congestion management in power grids. 
 
-The pipeline integrates **Uncertainty Quantification (UQ)** to support risk-aware decision making by separating uncertainty into:
+Assessing the reliability of AI-assisted decision support systems under unseen operating conditions is critical. This project anticipates unreliable AI recommendations and provides early warnings to human operators.
 
-- **Aleatoric Uncertainty**  
-  Inherent variability in load and generation forecasts, estimated using residual-based models (HistGradientBoosting).
+The pipeline integrates **Uncertainty Quantification (UQ)** to support risk-aware decision making by separating uncertainty into two components:
+  - **Aleatoric Uncertainty:** The uncertainty of the forecasted values (predictive variance). It captures the inherent stochastic variability and forecast errors of load and generation, estimated by modeling the residuals of the primary Forecaster (HistGradientBoosting).
+  - **Epistemic Uncertainty:** The uncertainty associated with the RL agent's decisions when facing out-of-distribution or unseen grid states, computed using an **Evidential Neural Network (ENN)**.
 
-- **Epistemic Uncertainty**  
-  Model uncertainty due to lack of knowledge, computed using an **Evidential Neural Network (ENN)** observing the grid state.
 
-A **final binary classifier** combines grid statistics with uncertainty-aware features to estimate blackout risk and quantify the confidence of the AI assistant’s recommendations, preventing unsafe operations in critical power grid environments.
+
+These indicators are integrated into a **failure prediction model** that estimates the probability of RL agent failure under future contigencies (disconnection of lines).
+
+Finally, a **Dual LLM Architecture** takes the outputs of the predictive classifiers and synthesizes robust, symbolic Python rules (`best_rule.py`). This translates complex, black-box uncertainty metrics into intepretable, human-readable operational guidelines, ensuring the AI assistant's boundaries are transparent and safe.
 
 ---
 
@@ -27,7 +28,7 @@ A **final binary classifier** combines grid statistics with uncertainty-aware fe
 grid_security_project/
 │
 ├── agents/
-│   └── network36/                # Pre-trained Grid2Op agent (CurriculumAgent)
+│   └── network36/                       # Pre-trained Grid2Op agent (CurriculumAgent)
 │
 ├── data/
 │   ├── uncertainty_disconnection_analysis.csv
@@ -35,25 +36,36 @@ grid_security_project/
 │   └── y_train_36.npy
 │
 ├── forecasts/
-│   └── HBGB_36.pkl                # Load / generation forecaster
+│   └── HBGB_36.pkl                      # Load / generation forecaster
 │
 ├── models/
-│   ├── enn_36.pth                 # Evidential Neural Network (epistemic uncertainty)
-│   ├── enn_data/                  # ENN training datasets
-│   ├── HBGB_36_aleatoric.pkl       # Aleatoric uncertainty model
-│   └── final_classifier36.pkl     # Final blackout classifier
+│   ├── enn_36.pth                       # Evidential Neural Network (epistemic uncertainty)
+│   ├── enn_data/                        # ENN training datasets
+│   ├── HBGB_36_aleatoric.pkl            # Aleatoric uncertainty model
+│   └── final_classifier36.pkl           # Final blackout classifier
 │
+├── llm_rules_results/                   # Generated Symbolic Rules (Dual LLM output
+│   ├── temp_<value>/                    # Explore different LLM temperatures (e.g., temp_0.3, temp_0.5)
+│       ├── line_<line_id>/              # Results for a specific critical line - line_id
+│           ├── best_changes.txt         # Log of modifications made to the rule
+│           ├── best_feedback.txt        # Evaluator LLM feedback on the rule     
+│           ├── best_justification.txt   # Logic justification
+│           ├── best_rule.py             # The final interpretable Python rule
+│           ├── iteration_history.csv    # Initial rule candidates proposed by the LLM
+│           ├── seed_candidates.csv      # Results for another critical line
+│   
 ├── src/
-│   ├── collect_data.py            # Simulation and dataset generation
-│   ├── config.py                  # Central configuration (environment, modes, paths)
-│   ├── enn_models.py              # ENN architectures
-│   ├── train_classifier.py        # Classifier training and inference
-│   ├── train_forecast.py          # Forecaster training
-│   ├── training_enn.py            # ENN training pipeline
-│   └── utils.py                   # Feature extraction and grid statistics
+│   ├── collect_data.py                  # Simulation and dataset generation
+│   ├── config.py                        # Central configuration (environment, modes, paths)
+│   ├── dual_llm.py                      # Dual LLM: generator and critic 
+│   ├── enn_models.py                    # ENN architectures
+│   ├── train_classifier.py              # Classifier training and inference
+│   ├── train_forecast.py                # Forecaster training
+│   ├── training_enn.py                  # ENN training pipeline
+│   └── utils.py                         # Feature extraction and grid statistics
 │
-├── run_pipeline.py                # Main entry point
-├── requirements.txt               # Python dependencies
+├── run_pipeline.py                      # Main entry point
+├── requirements.txt                     # Python dependencies
 ```
 ## Instalation 
 
@@ -64,7 +76,6 @@ Verify your Python version:
 ```
 python --version
 # Python 3.10.13
-
 ```
 ### 2. Clone the Repository
 ```
@@ -230,12 +241,21 @@ execution**.
 
 ---
 
+### 5. LLM-Guided Symbolic Rule Generation (Dual LLM)
+
+To convert the black-box classifier outputs into interpretable operational guidelines, a **Dual LLM Architecture** (Generator-Evaluator) processes the data. The system automatically iterates over multiple critical lines and explores various LLM temperature settings (hyperparameter search) to find the optimal balance between logical strictness and creative problem-solving.
+
+- **Dynamic Rule Synthesis:** The generator LLM writes explicit, symbolic Python rules (`best_rule.py`) for each targeted transmission line based on thresholds of grid statistics and uncertainty metrics.
+- **Evaluation & Refinement:** An evaluator LLM critiques the generated rules against false-alarm and oversight metrics. Changes and logical justifications are systematically logged (`best_feedback.txt`, `best_justification.txt`).
+- **Iterative Tracking:** The framework iteratively tests seeds and records performance metrics across different temperature folders, ensuring convergence on the safest and most accurate operational rule for every monitored line.
+
+---
+
 ### Final Objective
 
 The ultimate goal of this framework is to provide **real-time confidence levels**
 that allow:
 
-- Anticipation of cascading failures.
 - Validation of autonomous agent decisions.
-- Prevention of unsafe operations in critical power grid environments.
+- Prevention of unsafe operations in critical power grid environments through transparent, human-readable guidelines.
 
