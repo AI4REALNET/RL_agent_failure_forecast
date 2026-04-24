@@ -103,7 +103,7 @@ def rule(x):
     else:
         return 0
 [End of Rule]
-
+```
 ## 2. The Critic Agent
 
 The Critic acts as the supervisor of the optimization process. It analyzes the iteration history to detect unwanted oscillations (e.g., erratic jumping between high false positive and high false negative rates), identifies structurally degenerate rules, and outputs strict fine-tuning instructions to correct the Generator's trajectory.
@@ -192,7 +192,7 @@ Verify the current rule:
 - [ ] Uses only allowed features (not line_id_encoded)
 
 State: PASS or FAIL (list which checks failed).
-
+```
 ## 3. Syntax Repair Agent
 
 This prompt acts as a strictly syntactic failsafe mechanism. If the Generator outputs a rule that violates structural constraints (e.g., attempts to import external modules, produces invalid Python syntax, or returns non-binary values), the compilation error is caught and injected into this prompt for a surgical correction.
@@ -229,3 +229,4 @@ Requirements:
 
 Bad output:
 {{bad_output}}
+```
