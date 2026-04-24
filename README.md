@@ -135,7 +135,7 @@ PROBA_TEST_STEP = 50
 3. *Outcome*: Generates a CSV trace of that specific episode in `data/`.
 
 #### Critical Lines
-The system automatically monitors specific critical lines defined in `Config14` or `Config36`. 
+The system automatically monitors specific critical lines defined in CFG. 
 
 ## Methodology
 
