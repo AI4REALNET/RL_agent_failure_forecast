@@ -3,67 +3,96 @@ import sys
 import subprocess
 import time
 
-from src.config import CFG
-from src.config import TRAIN_MODE, PROBA_TEST_STEP, PREDICT_PROBA_MODE
+# BUG FIX: Added TEST_SINGLE_EPISODE to the import statement to prevent NameError
+from src.config import CFG, TRAIN_MODE, PREDICT_PROBA_MODE, TEST_SINGLE_EPISODE
 
-def run_command(command_str):
-    """Executa um comando no terminal com o PYTHONPATH configurado."""
+
+def execute_module(module_path: str) -> None:
+    """
+    Executes a Python module as a subprocess, ensuring the project root
+    is correctly appended to the PYTHONPATH to prevent module resolution errors.
+
+    Args:
+        module_path (str): The relative path to the Python script to execute.
+
+    Raises:
+        SystemExit: If the subprocess fails, it exits with the same error code.
+    """
     print(f"\n{'=' * 60}")
-    print(f" EXECUTING: {command_str}")
+    print(f" EXECUTING MODULE: {module_path}")
     print(f"{'=' * 60}\n")
 
-    # Configura o ambiente para o Python encontrar a pasta raiz
+    # Set up the environment variables to ensure proper module resolution
     env = os.environ.copy()
-    # Pega no caminho da pasta onde o script está (raiz do projeto)
-    current_dir = os.getcwd()
-    # Pega no caminho da pasta "mãe" (a que contém a pasta grid_security_project)
-    parent_dir = os.path.dirname(current_dir)
+    current_directory = os.getcwd()
+    parent_directory = os.path.dirname(current_directory)
 
-    # Adicionamos AMBAS ao PYTHONPATH por segurança
-    env["PYTHONPATH"] = current_dir + os.pathsep + parent_dir + os.pathsep + env.get("PYTHONPATH", "")
+    # Prepend project directories to PYTHONPATH for reliable absolute imports
+    python_path = f"{current_directory}{os.pathsep}{parent_directory}"
+    env["PYTHONPATH"] = python_path + os.pathsep + env.get("PYTHONPATH", "")
 
     start_time = time.time()
 
-    process = subprocess.run([sys.executable] + command_str.split(), check=False, env=env)
+    # Building the command as a list avoids errors if paths contain spaces
+    command = [sys.executable, module_path]
 
-    elapsed = time.time() - start_time
+    try:
+        # check=True automatically raises CalledProcessError if returncode != 0
+        subprocess.run(command, check=True, env=env)
+        elapsed_time = time.time() - start_time
+        print(f"\n SUCCESS: {module_path} completed in {elapsed_time:.2f} seconds.")
+    except subprocess.CalledProcessError as e:
+        print(f"\n ERROR: {module_path} failed with exit code {e.returncode}.")
+        sys.exit(e.returncode)
 
-    if process.returncode != 0:
-        print(f"\n ERROR: {command_str} failed with exit code {process.returncode}.")
-        sys.exit(process.returncode)
+
+def run_training_pipeline() -> None:
+    """
+    Manages the execution flow of the full training pipeline, checking
+    for existing artifacts to avoid redundant and expensive computations.
+    """
+    print("\n[MODE] INITIALIZING FULL TRAINING PIPELINE")
+
+    # Step 1: Train Forecasters
+    if not os.path.exists(CFG.MODEL_MEAN_PATH):
+        execute_module("src/train_forecast.py")
     else:
-        print(f"\n SUCCESS: {command_str} completed in {elapsed:.2f}s.")
+        print(f" SKIP: Forecast model already exists at {CFG.MODEL_MEAN_PATH}")
+
+    # Step 2: Train ENN (Episode Neural Network)
+    if not os.path.exists(CFG.MODEL_ENN_PATH):
+        execute_module("src/training_enn.py")
+    else:
+        print(f" SKIP: ENN model already exists at {CFG.MODEL_ENN_PATH}")
+
+    # Step 3: Collect Data for the Classifier
+    if not os.path.exists(CFG.CSV_OUTPUT_PATH):
+        execute_module("src/collect_data.py")
+    else:
+        print(f" SKIP: Data already collected at {CFG.CSV_OUTPUT_PATH}")
+
+    # Step 4: Train Classifier (Always runs in this pipeline based on original logic)
+    execute_module("src/train_classifier.py")
 
 
-def main():
-    # Log inicial para debug - Se isto não aparecer, o erro é no import do CFG
-    print(f" CONFIGURATION DETECTED: ENV={getattr(CFG, 'ENV_NAME', 'UNKNOWN')}")
+def main() -> None:
+    """
+    Main entry point for the SEST orchestrator. Routes execution based on
+    the configuration flags defined in src.config.
+    """
+    # Defensive programming: provide a fallback if ENV_NAME is missing
+    environment_name = getattr(CFG, 'ENV_NAME', 'UNKNOWN')
+    print(f" CONFIGURATION DETECTED: ENV={environment_name}")
+
+    # Route execution based on configured mode
     if TRAIN_MODE:
-        print("\n[MODE] FULL TRAINING PIPELINE")
-
-        # Passo 1: Forecasters
-        if not os.path.exists(CFG.MODEL_MEAN_PATH):
-            run_command("src/train_forecast.py")
-
-        # Passo 2: ENN
-        if not os.path.exists(CFG.MODEL_ENN_PATH):
-            run_command("src/training_enn.py")
-
-        # Passo 3: Dados e Classificador
-        #if not os.path.exists(CFG.CSV_OUTPUT_PATH):
-
-        run_command("src/collect_data.py")
-
-        run_command("src/train_classifier.py")
-
+        run_training_pipeline()
     elif TEST_SINGLE_EPISODE:
-        run_command("src/collect_data.py")
-
+        execute_module("src/collect_data_1.py")
     elif PREDICT_PROBA_MODE:
-        run_command("src/train_classifier.py")
-
+        execute_module("src/train_classifier.py")
     else:
-        print("\n WARNING: No active mode selected in src/config.py.")
+        print("\n WARNING: No active execution mode selected in src/config.py.")
 
 
 if __name__ == "__main__":
