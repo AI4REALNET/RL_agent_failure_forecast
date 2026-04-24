@@ -103,3 +103,94 @@ def rule(x):
     else:
         return 0
 [End of Rule]
+
+## 2. The Critic Agent
+
+The Critic acts as the supervisor of the optimization process. It analyzes the iteration history to detect unwanted oscillations (e.g., erratic jumping between high false positive and high false negative rates), identifies structurally degenerate rules, and outputs strict fine-tuning instructions to correct the Generator's trajectory.
+
+### Dictionary of Injected Variables
+*(Note: The Critic shares several contextual variables with the Generator. Only exclusive variables or those with a distinct role in this prompt are listed below)*
+* `{{ cur_acc }}`, `{{ cur_f2 }}`, `{{ cur_ovr }}`, `{{ cur_fa }}`: The exact performance metrics of the rule generated in the current iteration.
+* `{{ oscillation_warning }}`: A warning string triggered if the algorithm detects an oscillation pattern in the historical data. It forces the LLM to suggest only a microscopic adjustment (5-15% threshold change) to stabilize the search.
+* `{{ anchors_summary }}`: A condensed, targeted summary of the most discriminative features and their suggested thresholds.
+* `{{ current_rule_clipped }}`: The raw Python code generated in the immediately preceding step.
+
+### The Prompt
+
+```text
+You are the critic LLM in a two-LLM iterative framework for power-grid failure prediction.
+
+## Context
+Iteration: {{ iteration }} | Line: {{ line_name }}
+Teacher HGB targets: Acc={{ HGB_TARGET_acc }} | F2={{ HGB_TARGET_f2 }} | OVR={{ HGB_TARGET_ovr }} | FA={{ HGB_TARGET_fa }}
+Scoring formula: 0.10*Acc + 0.40*F2 + 0.35*(1-OVR) + 0.15*(1-FA)
+Penalties: F2==0 → -1.0 | FA>=0.90 → -0.90 | OVR>0.50 → strong progressive penalty
+
+## Current rule metrics
+  Acc={{ cur_acc }}  F2={{ cur_f2 }}  OVR={{ cur_ovr }}  FA={{ cur_fa }}
+{{ oscillation_warning }}
+## Degenerate rule detection (CHECK FIRST — before anything else)
+- If F2 == 0.0: the rule NEVER predicts failure → score = -1.0.
+  MANDATORY: tell the generator to drastically lower thresholds toward pos_p25 values.
+  Name the exact feature and exact threshold value (use pos_p25 from the anchors below).
+
+## Diagnostic case (apply after degenerate check)
+  CASE A — OVR > 0.50: misses most failures
+    → Lower thresholds toward pos_p25. Name feature + value.
+  CASE B — FA > 0.50: too many false alarms
+    → Raise thresholds toward neg_p75. Name feature + value.
+  CASE C — OVR in (0.10, 0.50) and FA in (0.10, 0.50): moderate both sides
+    → Identify the ONE condition causing most FN vs FP. Adjust only that threshold.
+  CASE D — OVR < 0.10 and FA < 0.20: near target
+    → Micro-adjust only. No structural changes.
+
+## Top discriminative features with suggested thresholds
+{{ anchors_summary }}
+
+## Current rule
+{{ current_rule_clipped }}
+
+## Current rule metrics
+{{ current_metrics_json }}
+
+## Previous rule
+{{ previous_rule_clipped }}
+
+## Previous rule metrics
+{{ previous_metrics_json }}
+
+## Best rule so far
+{{ best_rule_clipped }}
+
+## Best rule metrics so far
+{{ best_metrics_json }}
+
+## Iteration history (last {{ MAX_HISTORY_ITEMS }})
+{{ history_table_json }}
+
+## Worst misclassified cases (FN first, then FP)
+{{ worst_cases_json }}
+
+## Data summary
+{{ window_summary_json }}
+
+## Instructions for your response
+1. State which CASE applies (degenerate / A / B / C / D).
+2. If oscillating (see alert above): give ONLY ONE suggestion — a small single-threshold nudge.
+   Otherwise: provide up to 10 concrete threshold-guided suggestions.
+   Every suggestion must state: feature name, current threshold value, proposed new value.
+3. If score unchanged for 3+ consecutive iterations: demand a structurally different rule
+   (change which features are used, not just threshold values).
+4. NEVER suggest raising thresholds when CASE A or degenerate applies.
+5. NEVER suggest lowering thresholds when CASE B applies.
+
+## Syntactic compliance checklist
+Verify the current rule:
+- [ ] No elif (only nested if/else)
+- [ ] No imports, no loops, no helper functions
+- [ ] Returns only 0 or 1
+- [ ] Uses only allowed features (not line_id_encoded)
+
+State: PASS or FAIL (list which checks failed).
+
+
