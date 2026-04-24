@@ -17,7 +17,6 @@ A **final binary classifier** combines grid statistics with uncertainty-aware fe
 
 ## Supported Environments
 
-- **IEEE 14-bus** (`l2rpn_case14_sandbox`)
 - **Network 36** (`l2rpn_icaps_2021_small`)
 
 ---
@@ -90,7 +89,7 @@ Switch between the 14-bus and 36-bus networks by changing the ACTIVE_ENV variabl
 
 ```python 
 # src/config.py
-ACTIVE_ENV = "l2rpn_case14_sandbox"  # or "lr2rpn_icaps_2021_small
+ACTIVE_ENV = "lr2rpn_icaps_2021_small"
 ```
 
 #### Usage & Execution Modes
