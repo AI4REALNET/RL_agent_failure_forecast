@@ -171,7 +171,7 @@ Example output:
 ```
   [41_48_131]
   Following a contingency on line 41_48_131, the RL agent is predicted to fail
-  to provide a recommendation that solves a congestion problem if the maximum
+  to provide a recommendation that solves a problem if the maximum
   line loading (rho) at t is >= 0.82, or if the forecasted maximum line loading
   (rho) at t+12 is >= 0.66 while the epistemic uncertainty at t is >= 0.77 and
   the forecasted total active power load at t+12 is <= 643 MW.
