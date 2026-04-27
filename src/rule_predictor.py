@@ -4,20 +4,26 @@ import ast
 import datetime
 import glob
 import os
+import sys
 import textwrap
 from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-# Project imports — available because this file lives in src/
+# Ensure project root is on the path so curriculumagent and src/ imports work
+_SRC_DIR  = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_SRC_DIR)
+for _p in [_ROOT_DIR, _SRC_DIR]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# Project imports
 try:
     from config import CFG
     from utils import compute_grid_stats
     from training_enn import get_uncertainty
-    # get_features_with_history is defined in collect_data.py
     from collect_data import get_features_with_history
 except ImportError:
-    # Fallback for isolated testing outside the project
     CFG = None
     compute_grid_stats = None
     get_uncertainty = None
@@ -335,7 +341,7 @@ def _run_forecast(
             }}),
         ]
 
-        sim_obs, _, _, _ = obs_copy.simulate(None)  # None = do-nothing action
+        sim_obs, _, _, _ = obs_copy.simulate(obs._obs_env._helper_action_env({}))
 
         # 4. Grid statistics at t+12
         out["fcast_grid_stats"] = compute_grid_stats_fn(sim_obs)
@@ -423,6 +429,13 @@ class RulePredictor:
         self._rules: Dict[str, Any] = {}
         self._codes: Dict[str, str] = {}
         self._load_all_rules()
+
+        if not self._has_forecast_models:
+            print(
+                "[WARN] rule_predictor: forecast models not provided — "
+                "fcast_* and epistemic_* features will be NaN. "
+                "Pass model_predict, model_aleatoric and model_enn to RulePredictor()."
+            )
 
     # ── Properties ────────────────────────────────────────────────────────────
 
@@ -549,11 +562,7 @@ class RulePredictor:
                 "fcast_nb_rho_ge_0.95":  float(fgs.get("nb_rho_ge_0.95", float("nan"))),
             })
         else:
-            print(
-                "[WARN] rule_predictor: forecast models not provided — "
-                "fcast_* and epistemic_* features will be NaN. "
-                "Pass model_predict, model_aleatoric and model_enn to RulePredictor()."
-            )
+            pass  # Warning already shown in __init__
 
         return self._build_result(line_name, features)
 

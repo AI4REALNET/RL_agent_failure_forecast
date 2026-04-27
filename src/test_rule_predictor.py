@@ -1,55 +1,66 @@
+import argparse
 import os
+import sys
 from typing import Any, Dict, List, Optional, Tuple
-from config import CFG, OUTPUT_DIR_LLM
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import grid2op
+from curriculumagent.baseline.baseline import CurriculumAgent
+from lightsim2grid import LightSimBackend
+
+from config import CFG, OUTPUT_DIR_LLM, ENN_PARAMS
+from rule_predictor import RulePredictor
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 EPISODE_SEED: int = 50
-RESULTS_DIR = os.path.join(OUTPUT_DIR_LLM, "temp_0.8")
+RESULTS_DIR: str  = os.path.join(OUTPUT_DIR_LLM, "temp_0.8")
+HORIZON: int      = 12   # steps = 1 hour at 5 min resolution
+
+from grid2op.Action import PowerlineSetAction
+from grid2op.Opponent import RandomLineOpponent
+
+OPP_KWARGS: Dict[str, Any] = {
+    "opponent_attack_duration": 288,
+    "opponent_attack_cooldown": 288,
+    "opponent_budget_per_ts":   0.5,
+    "opponent_init_budget":     10_000.0,
+    "opponent_action_class":    PowerlineSetAction,
+    "opponent_class":           RandomLineOpponent,
+}
+
 
 # ---------------------------------------------------------------------------
-# Path setup —
+# Model loading
 # ---------------------------------------------------------------------------
 
-import grid2op
-from grid2op.Agent import CurriculumAgent
+def _load_models() -> Tuple[Any, Any, Any]:
+    import joblib
+    import torch
+    from enn_models import EvidentialNetwork
 
-try:
-    from lightsim2grid import LightSimBackend
-    _BACKEND = LightSimBackend()
-except ImportError:
-    _BACKEND = None
+    mp = joblib.load(CFG.MODEL_MEAN_PATH)
+    ma = joblib.load(CFG.MODEL_ALEATORIC_PATH)
 
-from rule_predictor import RulePredictor
+    checkpoint = torch.load(CFG.MODEL_ENN_PATH, map_location="cpu")
+    hidden_dim = checkpoint["embedding.0.weight"].shape[0]
+    me = EvidentialNetwork(
+        input_dim=ENN_PARAMS["input_dim"],
+        num_classes=CFG.ENN_TOP_K,
+        hidden_dim=hidden_dim,
+        dropout=CFG.ENN_DROPOUT,
+    )
+    me.load_state_dict(checkpoint)
+    me.eval()
+    return mp, ma, me
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _try_load_models() -> Tuple[Any, Any, Any]:
-    mp = ma = me = None
-    try:
-        import joblib
-        if os.path.exists(CFG.MODEL_MEAN_PATH):
-            mp = joblib.load(CFG.MODEL_MEAN_PATH)
-        if os.path.exists(CFG.MODEL_ALEATORIC_PATH):
-            ma = joblib.load(CFG.MODEL_ALEATORIC_PATH)
-    except Exception:
-        pass
-    try:
-        import torch
-        from enn_models import ENN
-        if os.path.exists(CFG.MODEL_ENN_PATH):
-            me = ENN()
-            me.load_state_dict(torch.load(CFG.MODEL_ENN_PATH, map_location="cpu"))
-            me.eval()
-    except Exception:
-        pass
-    return mp, ma, me
-
 
 def _line_name_to_idx(env: Any, line_name: str) -> Optional[int]:
     clean = line_name.replace("line_", "")
@@ -59,8 +70,11 @@ def _line_name_to_idx(env: Any, line_name: str) -> Optional[int]:
     return None
 
 
-def _simulate_contingency(obs: Any, line_idx: int, env: Any) -> bool:
-    """Returns True if disconnecting the line causes a game over."""
+def _simulate_disconnection(obs: Any, line_idx: int, env: Any) -> bool:
+    """
+    Simulates disconnecting *line_idx* and checks if the grid fails.
+    Returns True if the contingency causes a game over.
+    """
     try:
         act = env.action_space({"set_line_status": [(line_idx, -1)]})
         _, _, done, info = obs.simulate(act)
@@ -73,125 +87,132 @@ def _simulate_contingency(obs: Any, line_idx: int, env: Any) -> bool:
 # Episode runner
 # ---------------------------------------------------------------------------
 
-def run_episode(
-    env: Any,
-    predictor: RulePredictor,
-    lines_to_monitor: List[str],
-    line_indices: Dict[str, int],
-    use_attack: bool,
-) -> None:
-    observations_array: List[Any] = []
-    predictor.observations_array  = observations_array
-
-    env.set_id(EPISODE_SEED)
-    obs   = env.reset()
-    agent = DoNothingAgent(env.action_space)
-    done  = False
-    step  = 0
-
-    label = "WITH ATTACK" if use_attack else "NO ATTACK"
+def run_episode(use_attack: bool) -> None:
+    label = "HeavyAttack_1" if use_attack else "Normal"
     print(f"\n{'═'*65}")
     print(f"  Scenario: {label}  |  seed={EPISODE_SEED}")
     print(f"{'═'*65}\n")
 
-    # Track: for each rule alert, did the actual failure happen?
-    # List of (step, line_name, actual_fail)
-    alerts: List[Tuple[int, str, bool]] = []
+    # Build environment
+    env_kwargs: Dict[str, Any] = {"backend": LightSimBackend()}
+    if use_attack:
+        env_kwargs.update(OPP_KWARGS)
+    env = grid2op.make(CFG.ENV_NAME, **env_kwargs)
+
+    # Load models and agent
+    mp, ma, me = _load_models()
+    agent = CurriculumAgent(env.action_space, env.observation_space, name="CA")
+    try:
+        agent.load(CFG.AGENT_PATH)
+    except Exception:
+        print("[WARN] CurriculumAgent not loaded — using do-nothing fallback.")
+
+    # Import project functions explicitly so RulePredictor has them
+    from utils import compute_grid_stats
+    from training_enn import get_uncertainty
+    from collect_data import get_features_with_history
+
+    # Build predictor
+    observations_array: List[Any] = []
+    predictor = RulePredictor(
+        rules_dir=RESULTS_DIR,
+        model_predict=mp,
+        model_aleatoric=ma,
+        model_enn=me,
+        observations_array=observations_array,
+        compute_grid_stats_fn=compute_grid_stats,
+        get_uncertainty_fn=get_uncertainty,
+        get_features_with_history_fn=get_features_with_history,
+    )
+    lines = predictor.available_lines
+    if not lines:
+        print(f"[ERROR] No rules found in '{RESULTS_DIR}'.")
+        return
+
+    # Resolve line names to environment indices
+    line_indices: Dict[str, int] = {}
+    for ln in lines:
+        idx = _line_name_to_idx(env, ln)
+        if idx is not None:
+            line_indices[ln] = idx
+    lines = list(line_indices.keys())
+
+    print(f"[INFO] Lines monitored: {lines}\n")
+
+    # ── Episode loop ─────────────────────────────────────────────────────
+    obs               = env.reset(seed=EPISODE_SEED)
+    done              = False
+    step              = 0
+    gameover_step: Optional[int] = None
+
+    confirmed_alerts: Dict[str, List[int]] = {ln: [] for ln in lines}
+
+    print(f"[INFO] Episode started. Running...\n")
 
     while not done:
         step += 1
         observations_array.append(obs)
 
-        for line_name in lines_to_monitor:
+        if step % 100 == 0:
+            print(f"  [step {step:5d}] running... (no alerts so far)" if not any(confirmed_alerts.values())
+                  else f"  [step {step:5d}] running...")
+
+        for line_name in lines:
             result    = predictor.predict(obs, line_name)
             predicted = result["prediction"]
 
             if predicted == 1:
-                # Check what actually happens if the line is disconnected now.
+                # Verify with actual contingency simulation
                 idx         = line_indices[line_name]
-                actual_fail = _simulate_contingency(obs, idx, env)
-                alerts.append((step, line_name, actual_fail))
+                actual_fail = _simulate_disconnection(obs, idx, env)
 
-                print(f"  Step {step:4d} | ️  ALERT [{line_name}]")
-                print(f"  {result['sentence']}\n")
+                if actual_fail:
+                    confirmed_alerts[line_name].append(step)
+                    print(f"  Step {step:4d} | [{line_name}] FAILURE PREDICTED")
+                    print(f"  {result['sentence']}\n")
 
-        # Attack: disconnect a monitored line every 30 steps.
-        if use_attack and step % 30 == 0:
-            attack_line = lines_to_monitor[step // 30 % len(lines_to_monitor)]
-            idx         = line_indices.get(attack_line)
-            action      = (env.action_space({"set_line_status": [(idx, -1)]})
-                           if idx is not None else agent.act(obs, None, None))
-            print(f"  Step {step:4d} |   ATTACK: line [{attack_line}] disconnected\n")
-        else:
-            action = agent.act(obs, None, None)
+        # Step the environment with the agent
+        try:
+            action = agent.act(obs, 0.0, done)
+        except Exception:
+            action = env.action_space({})
 
         obs, _, done, _ = env.step(action)
 
+        if done:
+            gameover_step = step
+
     # ── End-of-episode summary ───────────────────────────────────────────
-    print(f"{'─'*65}")
-    print(f"  Episode finished after {step} steps.\n")
+    print(f"\n{'─'*65}")
 
-    if not alerts:
-        print("  No alerts were triggered during this episode.\n")
+    if gameover_step is None:
+        print(f"  Agent completed the episode without failure ({step} steps).\n")
         return
 
-    print("  Alert summary:")
-    print(f"  {'Step':>5}  {'Line':<20}  {'Predicted':<12}  {'Actual outcome'}")
-    print(f"  {'─'*5}  {'─'*20}  {'─'*12}  {'─'*20}")
-    correct = 0
-    for s, ln, actual in alerts:
-        actual_str = "FAILURE ✓" if actual else "OK (false alarm)"
-        print(f"  {s:>5}  {ln:<20}  {'FAILURE':<12} {actual_str}")
-        if actual:
-            correct += 1
-
-    total = len(alerts)
-    print(f"\n  Correct alerts: {correct}/{total}  "
-          f"({'%.0f' % (correct/total*100)}% of alerts corresponded to actual failures)\n")
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main() -> None:
-    print("═" * 65)
-    print("  Grid2Op Rule Predictor — Episode Test")
-    print("═" * 65)
-
-    kwargs = {"backend": _BACKEND} if _BACKEND is not None else {}
-    env    = grid2op.make(CFG.ENV_NAME, **kwargs)
-
-    mp, ma, me = _try_load_models()
-
-    predictor = RulePredictor(
-        rules_dir=OUTPUT_DIR_LLM,
-        model_predict=mp,
-        model_aleatoric=ma,
-        model_enn=me,
-        observations_array=[],
-    )
-
-    if not predictor.available_lines:
-        print(f"[ERROR] No rules found in '{OUTPUT_DIR_LLM}'.")
-        return
-
-    all_lines    = CFG.LINES_TO_TEST or predictor.available_lines
-    line_indices = {ln: _line_name_to_idx(env, ln)
-                    for ln in all_lines
-                    if _line_name_to_idx(env, ln) is not None}
-    lines        = list(line_indices.keys())
-
-    print(f"\n[INFO] Environment : {CFG.ENV_NAME}")
-    print(f"[INFO] Lines monitored: {lines}")
-
-    print("\n--- Rule descriptions ---")
+    print(f"  Agent failed at step {gameover_step}.\n")
+    print(f"  Did the rule warn in the {HORIZON} steps before failure?\n")
+    print(f"  {'Line':<20}  {'Warned?':<8}  Warning steps")
+    print(f"  {'─'*20}  {'─'*8}  {'─'*25}")
     for ln in lines:
-        print(f"  [{ln}]\n  {predictor.sentence_only(ln)}\n")
+        warning_steps = [
+            s for s in confirmed_alerts[ln]
+            if gameover_step - HORIZON <= s < gameover_step
+        ]
+        warned = len(warning_steps) > 0
+        tick   = "YES " if warned else "NO  "
+        print(f"  {ln:<20}  {tick:<8}  {warning_steps if warning_steps else '—'}")
+    print()
 
-    run_episode(env, predictor, lines, line_indices, use_attack=False)
-    run_episode(env, predictor, lines, line_indices, use_attack=True)
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--attack", action="store_true",
+        help="Run with HeavyAttack_1 opponent.",
+    )
+    args = parser.parse_args()
+    run_episode(use_attack=args.attack)

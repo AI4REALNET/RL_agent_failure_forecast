@@ -12,6 +12,7 @@ MODELS_DIR = os.path.join(BASE_DIR, "models")
 MODELS_FORECASTER = os.path.join(BASE_DIR, "forecasts")
 AGENT_DIR = os.path.join(BASE_DIR, "agents")
 ENN_DATA_DIR = os.path.join(MODELS_DIR, "enn_data")
+OUTPUT_DIR_LLM = os.path.join(BASE_DIR, "llm_rule_results")
 
 # Create directories automatically
 for d in [DATA_DIR, MODELS_DIR, MODELS_FORECASTER, AGENT_DIR, ENN_DATA_DIR]:
@@ -51,7 +52,7 @@ class CFG:
     # ENN Architecture
     ENN_INPUT_DIM = 1363
     ENN_NUM_CLASSES = 250
-    ENN_HIDDEN_DIM = 512
+    ENN_HIDDEN_DIM = 256
     ENN_DROPOUT = 0.35
 
     # ENN Training Hyperparameters (Migrated from training_enn.py)
