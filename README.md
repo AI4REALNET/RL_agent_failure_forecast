@@ -48,7 +48,7 @@ grid_security_project/
 │   ├── config.py                        # Central configuration (environment, modes, paths)
 │   ├── dual_llm.py                      # Dual LLM: generator and critic 
 │   ├── enn_models.py                    # ENN architectures
-│   ├── rule_predictor.py                # Live rule inference and natural-language translation
+│   ├── rule_predictor.py                # Rule inference and natural-language translation
 │   ├── test_rule_predictor.py           # Live rule inference and natural-language translation
 │   ├── train_classifier.py              # Classifier training and inference
 │   ├── train_forecast.py                # Forecaster training
