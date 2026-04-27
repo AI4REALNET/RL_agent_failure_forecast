@@ -299,20 +299,27 @@ For example, the following rule:
 
 ```python
 def rule(x):
-    if x["max_line_rho"] >= 0.82:
-        return 1
+    if x["max_line_rho"] >= 0.65:
+        if x["epistemic_before"] >= 0.7891:
+            if x["aleatoric_gen_p_mean"] <= 0.3434:
+                return 1
+            else:
+                return 0
+        else:
+            return 0
     else:
-        if (x["fcast_max_line_rho"] >= 0.66 and
-            x["epistemic_before"] >= 0.77 and
-            x["fcast_sum_load_p"] <= 643.00):
-            return 1
+        if x["fcast_sum_load_q"] >= 155.5429:
+            if x["aleatoric_gen_p_mean"] <= 0.3434:
+                return 1
+            else:
+                return 0
         else:
             return 0
 ```
 
 is automatically translated to:
 
-> *Following a contingency on line 41_48_131, the RL agent is predicted to fail to provide a recommendation that solves a congestion problem if the maximum line loading (rho) at t is >= 0.82, or if the forecasted maximum line loading (rho) at t+12 is >= 0.66 while the epistemic uncertainty at t is >= 0.77 and the forecasted total active power load at t+12 is <= 643 MW.*
+> *Following a contingency on line 34_35_110, the RL agent is predicted to fail if the maximum line loading at t is >= 0.65 while the epistemic uncertainty is <= 0.79 and the mean aleatoric generation uncertainty is <= 0.34, or if the forecasted reactive load at t+12 is >= 155.54 MVAR and the mean aleatoric generation uncertainty is <= 0.34$. 
 
 In LLM Rule Inference mode, the system also evaluates each rule against the current grid state in real time: it runs the forecast pipeline internally (computing t+12 features from the live observation), applies the rule, and reports the prediction alongside the explanation sentence.
 
