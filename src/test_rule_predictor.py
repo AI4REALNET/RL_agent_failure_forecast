@@ -7,6 +7,7 @@ from config import CFG, OUTPUT_DIR_LLM
 # ---------------------------------------------------------------------------
 
 EPISODE_SEED: int = 50
+RESULTS_DIR = os.path.join(OUTPUT_DIR_LLM, "temp_0.8")
 
 # ---------------------------------------------------------------------------
 # Path setup —
