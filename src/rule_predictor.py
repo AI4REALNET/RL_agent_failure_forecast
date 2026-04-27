@@ -221,7 +221,7 @@ def translate_rule_to_sentence(rule_code: str, line_name: str) -> str:
     return (
         f"Following a contingency on line {line_name}, "
         f"the RL agent is predicted to fail to provide a recommendation "
-        f"that solves a congestion problem {condition_str}."
+        f"that solves a problem {condition_str}."
     )
 
 
