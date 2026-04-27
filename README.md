@@ -319,7 +319,7 @@ def rule(x):
 
 is automatically translated to:
 
-> *Following a contingency on line 34_35_110, the RL agent is predicted to fail if the maximum line loading at t is >= 0.65 while the epistemic uncertainty is <= 0.79 and the mean aleatoric generation uncertainty is <= 0.34, or if the forecasted reactive load at t+12 is >= 155.54 MVAR and the mean aleatoric generation uncertainty is <= 0.34$. 
+> *Following a contingency on line 34_35_110, the RL agent is predicted to fail if the maximum line loading at t is >= 0.65 while the epistemic uncertainty is <= 0.79 and the mean aleatoric generation uncertainty is <= 0.34, or if the forecasted reactive load at t+12 is >= 155.54 MVAR and the mean aleatoric generation uncertainty is <= 0.34*. 
 
 In LLM Rule Inference mode, the system also evaluates each rule against the current grid state in real time: it runs the forecast pipeline internally (computing t+12 features from the live observation), applies the rule, and reports the prediction alongside the explanation sentence.
 
