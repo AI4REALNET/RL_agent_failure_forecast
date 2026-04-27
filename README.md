@@ -30,29 +30,18 @@ grid_security_project/
 ├── agents/
 │   └── network36/                       # Pre-trained Grid2Op agent (CurriculumAgent)
 │
-├── data/
-│   ├── uncertainty_disconnection_analysis.csv
-│   ├── X_train_36.npy
-│   └── y_train_36.npy
 │
 ├── forecasts/
 │   └── HBGB_36.pkl                      # Load / generation forecaster
 │
 ├── models/
 │   ├── enn_36.pth                       # Evidential Neural Network (epistemic uncertainty)
-│   ├── enn_data/                        # ENN training datasets
 │   ├── HBGB_36_aleatoric.pkl            # Aleatoric uncertainty model
-│   └── final_classifier36.pkl           # Final blackout classifier
 │
 ├── llm_rules_results/                   # Generated Symbolic Rules (Dual LLM output)
 │   └── temp_<value>/                    # Explore different LLM temperatures (e.g., temp_0.3, temp_0.5)
 │       └── line_<line_id>/              # Results for a specific critical line - line_id
-│           ├── best_changes.txt         # Log of modifications made to the rule
-│           ├── best_feedback.txt        # Evaluator LLM feedback on the rule     
-│           ├── best_justification.txt   # Logic justification
 │           ├── best_rule.py             # The final interpretable Python rule
-│           ├── iteration_history.csv    # Initial rule candidates proposed by the LLM
-│           └── seed_candidates.csv      # Results for another critical line
 │   
 ├── src/
 │   ├── collect_data.py                  # Simulation and dataset generation
