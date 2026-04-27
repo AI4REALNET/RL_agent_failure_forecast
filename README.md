@@ -49,6 +49,7 @@ grid_security_project/
 │   ├── dual_llm.py                      # Dual LLM: generator and critic 
 │   ├── enn_models.py                    # ENN architectures
 │   ├── rule_predictor.py                # Live rule inference and natural-language translation
+│   ├── test_rule_predictor.py           # Live rule inference and natural-language translation
 │   ├── train_classifier.py              # Classifier training and inference
 │   ├── train_forecast.py                # Forecaster training
 │   ├── training_enn.py                  # ENN training pipeline
@@ -185,6 +186,56 @@ Example output:
 The system automatically monitors specific critical lines defined in CFG. 
 
 
+D. **Live Episode Rule Test**
+
+Use `src/test_rule_predictor.py` to run a live episode with the CurriculumAgent and verify the symbolic rules in real time. For each monitored line at every step, the system:
+
+1. Applies the rule to predict failure 1 hour ahead.
+2. If failure is predicted, simulates the actual line disconnection to confirm whether the grid would really fail.
+3. Only prints an alert if both the rule **and** the simulation agree on failure.
+
+At the end of the episode it reports the step at which the agent failed and whether any rule issued a confirmed warning in the 12 steps (1 hour) before the actual failure.
+
+**Run (normal episode):**
+```bash
+python src/test_rule_predictor.py
+```
+
+**Run (with adversarial HeavyAttack_1 line attacks):**
+```bash
+python src/test_rule_predictor.py --attack
+```
+
+Example output:
+```
+═════════════════════════════════════════════════════════════════
+  Scenario: Normal  |  seed=50
+═════════════════════════════════════════════════════════════════
+
+[INFO] Lines monitored: ['34_35_110', '41_48_131', ...]
+[INFO] Episode started. Running...
+
+  [step   100] running...
+  [step   200] running...
+
+  Step  247 | [41_48_131] FAILURE PREDICTED
+  Following a contingency on line 41_48_131, the RL agent is predicted
+  to fail if the maximum line loading (rho) at t is >= 0.74 while the
+  epistemic uncertainty at t is >= 0.79.
+
+─────────────────────────────────────────────────────────────────
+  Agent failed at step 259.
+
+  Did the rule warn in the 12 steps before failure?
+
+  Line                  Warned?   Warning steps
+  ────────────────────  ────────  ─────────────────────────
+  34_35_110             NO        —
+  41_48_131             YES       [247, 251]
+  43_44_125             NO        —
+```
+
+The episode seed and rules directory can be configured at the top of `src/test_rule_predictor.py` via `EPISODE_SEED` and `RESULTS_DIR`.
 
 ## Methodology
 
