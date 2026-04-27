@@ -79,7 +79,7 @@ It is highly recommend to use a virtual environment of Python3.10.
 pip install -r requirements.txt
 ```
 ### 4. Agent Setup
-Ensure your pre-trained agent (e.g. CurriculumAgent) is located in `agent/` folder. You can configure the specific path in `src/config.py`
+Ensure your pre-trained agent (e.g. CurriculumAgent) is located in `agent/` folder. For this, go to the https://github.com/AI4REALNET/RL_agent_failure_forecast/releases/tag/v1.0-agents of this repository and download. You can configure the specific path in `src/config.py`. 
 
 
 ### Configuration
