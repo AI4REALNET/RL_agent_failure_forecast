@@ -93,24 +93,17 @@ Switch between the 14-bus and 36-bus networks by changing the ACTIVE_ENV variabl
 ACTIVE_ENV = "lr2rpn_icaps_2021_small"
 ```
 
-### 5. Pre-trained Models (Forecasters)
+### 5. Pre-trained Models
 
 The forecaster models are too large to be stored directly in this repository.
 They are hosted as binary attachments in the GitHub Releases section.
 
-**Option A — Automatic download (recommended):**
-The pipeline will automatically download the required models on first run.
-No manual action needed.
-
-**Option B — Manual download:**
 1. Go to the https://github.com/AI4REALNET/RL_agent_failure_forecast/releases/tag/v1.0-models
    of this repository.
 2. Download the following files from release `v1.0-models`:
    - `HBGB_36.pkl` -> place in `forecasts/`
    - `HBGB_36_aleatoric.pkl` -> place in `models/`
    - `enn_36.pth` -> place in `models/`
-
-The expected final layout is:
 
 #### Usage & Execution Modes
 Use the main script to run the pipeline. The behaviour depends on the flags set in ```src/config.py```.
